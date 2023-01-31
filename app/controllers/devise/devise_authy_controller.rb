@@ -31,13 +31,17 @@ class Devise::DeviseAuthyController < DeviseController
 
   # verify 2fa
   def POST_verify_authy
-    token = Authy::API.verify({
-      :id => @resource.authy_id,
-      :token => params[:token],
-      :force => true
-    })
+    account_sid = ENV['TWILIO_ACCOUNT_SID']
+    auth_token = ENV['TWILIO_AUTH_TOKEN']
+    verify_service_sid = ENV['VERIFY_SERVICE_SID']
+    client = Twilio::REST::Client.new(account_sid, auth_token)
+    
+    verification_check = client.verify
+        .services(verify_service_sid)
+        .verification_checks
+        .create(to: @resource.phone, code: params[:token])
 
-    if token.ok?
+    if verification_check == "approved"
       remember_device(@resource.id) if params[:remember_device].to_i == 1
       remember_user
       record_authy_authentication
@@ -173,8 +177,16 @@ class Devise::DeviseAuthyController < DeviseController
       return
     end
 
-    response = Authy::API.request_sms(:id => @resource.authy_id, :force => true)
-    render :json => {:sent => response.ok?, :message => response.message}
+    account_sid = ENV['TWILIO_ACCOUNT_SID']
+    auth_token = ENV['TWILIO_AUTH_TOKEN']
+    verify_service_sid = ENV['VERIFY_SERVICE_SID']
+    client = Twilio::REST::Client.new(account_sid, auth_token)
+    verification = @client.verify
+        .services(verify_service_sid)
+        .verifications
+        .create(to: @resource.phone, channel: 'sms')
+
+    render :json => {:sent => response.ok?, :message => verification.message}
   end
 
   private
